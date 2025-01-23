@@ -1,9 +1,8 @@
-let express = require("express"),
+const express = require("express"),
   async = require("async"),
-  pg = require("pg"),
+  { Pool } = require("pg"),
   path = require("path"),
   cookieParser = require("cookie-parser"),
-  bodyParser = require("body-parser"),
   methodOverride = require("method-override"),
   app = express(),
   server = require("http").Server(app),
@@ -22,8 +21,12 @@ io.sockets.on("connection", function (socket) {
   })
 })
 
-const pool = new pg.Pool({
-  connectionString: "postgres://postgres:postgres@localhost/postgres",
+const pool = new Pool({
+  user: 'postgres',
+  host: 'postgres',
+  database: 'postgres',
+  password: 'postgres',
+  port: 5432,
 })
 
 async.retry(
@@ -71,7 +74,8 @@ function collectVotesFromResult(result) {
 }
 
 app.use(cookieParser())
-app.use(bodyParser())
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 app.use(methodOverride("X-HTTP-Method-Override"))
 app.use(function (req, res, next) {
   res.header("Access-Control-Allow-Origin", "*")

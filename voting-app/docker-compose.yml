@@ -41,6 +41,18 @@ services:
     networks:
       - my_network
 
+  result:
+    build: ./result/
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./result:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+    networks:
+      - my_network
+
 volumes:
   redis_data:
   postgres_data:
