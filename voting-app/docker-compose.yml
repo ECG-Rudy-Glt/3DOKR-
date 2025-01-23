@@ -7,6 +7,7 @@ services:
       - .:/code
     depends_on:
       - redis
+      - postgres
     networks:
       - my_network
 
@@ -19,8 +20,30 @@ services:
     networks:
       - my_network
 
+  postgres:
+    image: postgres:alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_network
+
+  worker:
+    build: ./worker/
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - my_network
+
 volumes:
   redis_data:
+  postgres_data:
 
 networks:
   my_network:
