@@ -3,12 +3,11 @@
 
 NODES = {
   "manager1" => "192.168.50.106",
-  "worker1" => "192.168.50.107",
-  "worker2" => "192.168.50.108",
 }
 
 Vagrant.configure("2") do |config|
   config.vm.boot_timeout = 600
+
   NODES.each do |(node_name, ip_address)|
     config.vm.define node_name do |node|
       node.vm.box = "bento/ubuntu-20.04"
@@ -22,24 +21,36 @@ Vagrant.configure("2") do |config|
       end
 
       node.vm.provision "shell", inline: <<-SHELL
-        # Faire en sorte que les machines puissent communiquer entre elles via leur hostnames (exemple: ping worker1 depuis manager1)
-        #{NODES.map{ |n_name, ip| "echo '#{ip} #{n_name}' | sudo tee -a /etc/hosts\n"}.join}
+        echo '#{ip_address} #{node_name}' | sudo tee -a /etc/hosts
 
-        # Installer Docker
-        curl -fsSL get.docker.com -o get-docker.sh
-        CHANNEL=stable sh get-docker.sh
+        # Configurer le DNS pour éviter les problèmes de résolution
+        echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf
+        echo 'nameserver 1.1.1.1' | sudo tee -a /etc/resolv.conf
+
+        apt-get update
+        apt-get install -y curl git
+
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
         rm get-docker.sh
 
-        # Faire en sorte que le daemon Docker soit accessible depuis l'hôte
-        sudo mkdir -p /etc/systemd/system/docker.service.d
-        sudo bash -c 'echo -e "[Service]\nExecStart=\nExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375" > /etc/systemd/system/docker.service.d/options.conf'
-        sudo systemctl daemon-reload
-        sudo systemctl restart docker.service
-      SHELL
+        curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
 
-      node.vm.provision "docker" do |d|
-        d.pull_images "alpine:latest"
-      end
+        # Ajouter l'utilisateur vagrant au groupe docker pour éviter les problèmes de permissions
+        sudo usermod -aG docker vagrant
+
+        # Token a changer après les tetst!!!
+        if [ ! -d "/home/vagrant/3DOKR" ]; then
+          git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
+        fi
+
+        cd /home/vagrant/3DOKR
+        git checkout swarm_config
+
+        cd /home/vagrant/3DOKR/voting-app
+        docker compose up --build -d
+      SHELL
     end
   end
 end
