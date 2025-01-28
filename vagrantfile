@@ -3,6 +3,8 @@
 
 NODES = {
   "manager1" => "192.168.50.106",
+  "worker1"  => "192.168.50.107",
+  "worker2"  => "192.168.50.108",
 }
 
 Vagrant.configure("2") do |config|
@@ -20,37 +22,80 @@ Vagrant.configure("2") do |config|
         v.vmx["numvcpus"] = "2"
       end
 
+      # PROVISION COMMUN À TOUTES LES MACHINES (MANAGER + WORKERS)
       node.vm.provision "shell", inline: <<-SHELL
         echo '#{ip_address} #{node_name}' | sudo tee -a /etc/hosts
 
-        # Configurer le DNS pour éviter les problèmes de résolution
+        # Configurer DNS pour éviter les problèmes de résolution
+        # (Option rapide : désactiver systemd-resolved et gérer /etc/resolv.conf nous-mêmes)
+        systemctl disable systemd-resolved
+        systemctl stop systemd-resolved
+        rm /etc/resolv.conf
         echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf
         echo 'nameserver 1.1.1.1' | sudo tee -a /etc/resolv.conf
 
         apt-get update
         apt-get install -y curl git
 
+        # Installer Docker
         curl -fsSL https://get.docker.com -o get-docker.sh
         sh get-docker.sh
         rm get-docker.sh
 
+        # Installer Docker Compose
+        mkdir -p /usr/local/bin
         curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
         chmod +x /usr/local/bin/docker-compose
 
-        # Ajouter l'utilisateur vagrant au groupe docker pour éviter les problèmes de permissions
+        # Ajouter l'utilisateur vagrant au groupe docker
         sudo usermod -aG docker vagrant
-
-        # Token a changer après les tetst!!!
-        if [ ! -d "/home/vagrant/3DOKR" ]; then
-          git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
-        fi
-
-        cd /home/vagrant/3DOKR
-        git checkout swarm_config
-
-        cd /home/vagrant/3DOKR/voting-app
-        docker compose up --build -d
       SHELL
+
+      # PROVISION SPÉCIFIQUE AU MANAGER
+      if node_name == "manager1"
+        node.vm.provision "shell", inline: <<-SHELL
+          # -------------------------------
+          # 1) CODE EXACT QUI FONCTIONNE POUR LE MANAGER
+          # -------------------------------
+          # Token a changer après les tests !!!
+          if [ ! -d "/home/vagrant/3DOKR" ]; then
+            git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
+          fi
+
+          cd /home/vagrant/3DOKR
+          git checkout swarm_config
+
+          cd /home/vagrant/3DOKR/voting-app
+          docker compose up --build -d
+
+          # -------------------------------
+          # 2) INITIALISER SWARM SUR LE MANAGER
+          # -------------------------------
+          # On utilise l'IP du manager
+          docker swarm init --advertise-addr #{ip_address}
+
+          # Générer le token pour les workers
+          SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
+
+          # Stocker le token dans /vagrant, accessible à toutes les VM
+          echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
+        SHELL
+
+      # PROVISION SPÉCIFIQUE AUX WORKERS
+      else
+        node.vm.provision "shell", inline: <<-SHELL
+          # Attendre que le token soit généré par le manager
+          while [ ! -f /vagrant/swarm_worker_token ]; do
+            sleep 2
+          done
+
+          # Récupérer le token
+          SWARM_JOIN_TOKEN=$(cat /vagrant/swarm_worker_token)
+
+          # Rejoindre le swarm sur le manager
+          docker swarm join --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
+        SHELL
+      end
     end
   end
 end
