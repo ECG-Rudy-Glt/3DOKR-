@@ -79,9 +79,10 @@ Vagrant.configure("2") do |config|
 
           # Construire et taguer les images avec les bons noms
           docker compose build
-          docker tag voting-app_web:latest voting_web:latest
-          docker tag voting-app_worker:latest voting_worker:latest
-          docker tag voting-app_result:latest voting_result:latest
+          # Corriger les noms des images
+          docker tag voting-app-vote voting_web:latest
+          docker tag voting-app-worker voting_worker:latest
+          docker tag voting-app-result voting_result:latest
 
           # Déployer le stack
           docker stack deploy -c docker-compose.yml voting
@@ -108,3 +109,5 @@ Vagrant.configure("2") do |config|
     end
   end
 end
+
+
