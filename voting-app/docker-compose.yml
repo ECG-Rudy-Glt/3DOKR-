@@ -10,6 +10,13 @@ services:
       - postgres
     networks:
       - my_network
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
 
   redis:
     image: "redis:alpine"
@@ -53,10 +60,17 @@ services:
     networks:
       - my_network
     healthcheck:
-      test: ["CMD", "dotnet", "--version"]  
+      test: ["CMD", "dotnet", "--version"]
       interval: 10s
       timeout: 5s
       retries: 3
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
 
   result:
     build: ./result/
@@ -64,7 +78,7 @@ services:
       - "8888:8888"
     volumes:
       - ./result:/app
-      - /app/node_modules 
+      - /app/node_modules
     depends_on:
       worker:
         condition: service_healthy
@@ -72,6 +86,13 @@ services:
         condition: service_healthy
     networks:
       - my_network
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
 
 volumes:
   redis_data:
@@ -79,4 +100,4 @@ volumes:
 
 networks:
   my_network:
-    driver: bridge
+    driver: overlay

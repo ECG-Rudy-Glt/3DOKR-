@@ -84,16 +84,19 @@ Vagrant.configure("2") do |config|
       # PROVISION SPÉCIFIQUE AUX WORKERS
       else
         node.vm.provision "shell", inline: <<-SHELL
-          # Attendre que le token soit généré par le manager
-          while [ ! -f /vagrant/swarm_worker_token ]; do
+          # Attendre jusqu'à 120 secondes que le token soit généré par le manager
+          timeout=120
+          elapsed=0
+          until [ -f /vagrant/swarm_worker_token ] || [ $elapsed -ge $timeout ]; do
             sleep 2
+            elapsed=$((elapsed+2))
           done
-
-          # Récupérer le token
-          SWARM_JOIN_TOKEN=$(cat /vagrant/swarm_worker_token)
-
-          # Rejoindre le swarm sur le manager
-          docker swarm join --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
+          if [ -f /vagrant/swarm_worker_token ]; then
+            SWARM_JOIN_TOKEN=$(cat /vagrant/swarm_worker_token)
+            docker swarm join --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
+          else
+            echo "Erreur: token du swarm non disponible après $timeout secondes."
+          fi
         SHELL
       end
     end
