@@ -96,7 +96,17 @@ services:
 
 volumes:
   redis_data:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.50.106,rw"
+      device: ":/export/redis_data"
   postgres_data:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.50.106,rw"
+      device: ":/export/postgres_data"
 
 networks:
   my_network:

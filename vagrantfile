@@ -59,14 +59,14 @@ Vagrant.configure("2") do |config|
           # -------------------------------
           # Token a changer après les tests !!!
           if [ ! -d "/home/vagrant/3DOKR" ]; then
-            git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
+            git clone https://github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
           fi
 
           cd /home/vagrant/3DOKR
           git checkout swarm_config
 
           cd /home/vagrant/3DOKR/voting-app
-          docker compose up --build -d
+          docker stack deploy -c docker-compose.yml voting
 
           # -------------------------------
           # 2) INITIALISER SWARM SUR LE MANAGER
