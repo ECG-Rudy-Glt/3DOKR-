@@ -49,11 +49,30 @@ Vagrant.configure("2") do |config|
 
         # Ajouter l'utilisateur vagrant au groupe docker
         sudo usermod -aG docker vagrant
+
+        # Installation des paquets NFS
+        apt-get install -y nfs-common
       SHELL
 
       # PROVISION SPÉCIFIQUE AU MANAGER
       if node_name == "manager1"
         node.vm.provision "shell", inline: <<-SHELL
+          # Installation du serveur NFS
+          apt-get install -y nfs-kernel-server
+          
+          # Création des répertoires d'export
+          mkdir -p /export/redis_data /export/postgres_data
+          chown -R nobody:nogroup /export
+          chmod 777 /export/redis_data /export/postgres_data
+          
+          # Configuration des exports NFS
+          echo "/export/redis_data *(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+          echo "/export/postgres_data *(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
+          
+          # Redémarrage du serveur NFS
+          exportfs -a
+          systemctl restart nfs-kernel-server
+
           # -------------------------------
           # 1) CODE EXACT QUI FONCTIONNE POUR LE MANAGER
           # -------------------------------
