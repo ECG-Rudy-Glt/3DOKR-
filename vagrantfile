@@ -59,26 +59,28 @@ Vagrant.configure("2") do |config|
           # -------------------------------
           # Token a changer après les tests !!!
           if [ ! -d "/home/vagrant/3DOKR" ]; then
-            git clone https://github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
+           git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
           fi
 
           cd /home/vagrant/3DOKR
           git checkout swarm_config
 
           cd /home/vagrant/3DOKR/voting-app
-          docker stack deploy -c docker-compose.yml voting
+          # Construire et taguer les images
+          docker compose build
+          docker tag voting-app-web:latest voting_web:latest
+          docker tag voting-app-worker:latest voting_worker:latest
+          docker tag voting-app-result:latest voting_result:latest
 
-          # -------------------------------
-          # 2) INITIALISER SWARM SUR LE MANAGER
-          # -------------------------------
-          # On utilise l'IP du manager
+          # Initialiser le swarm avant le déploiement
           docker swarm init --advertise-addr #{ip_address}
 
           # Générer le token pour les workers
           SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
-
-          # Stocker le token dans /vagrant, accessible à toutes les VM
           echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
+
+          # Déployer le stack après l'initialisation du swarm
+          docker stack deploy -c docker-compose.yml voting
         SHELL
 
       # PROVISION SPÉCIFIQUE AUX WORKERS

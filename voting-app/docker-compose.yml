@@ -1,6 +1,6 @@
 services:
   web:
-    build: ./vote/
+    image: voting_web:latest
     ports:
       - "8080:8080"
     volumes:
@@ -51,7 +51,7 @@ services:
       retries: 5
 
   worker:
-    build: ./worker/
+    image: voting_worker:latest
     depends_on:
       - redis
       - postgres
@@ -71,7 +71,7 @@ services:
         condition: on-failure
 
   result:
-    build: ./result/
+    image: voting_result:latest
     ports:
       - "8888:8888"
     volumes:
