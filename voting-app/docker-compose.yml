@@ -53,10 +53,8 @@ services:
   worker:
     build: ./worker/
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      - redis
+      - postgres
     networks:
       - my_network
     healthcheck:
@@ -80,10 +78,8 @@ services:
       - ./result:/app
       - /app/node_modules
     depends_on:
-      worker:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      - worker
+      - postgres
     networks:
       - my_network
     deploy:
