@@ -10,7 +10,8 @@ services:
       - redis
       - postgres
     networks:
-      - my_network
+      - front
+      - back
     deploy:
       replicas: 2
       restart_policy:
@@ -18,12 +19,10 @@ services:
 
   redis:
     image: "redis:alpine"
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - my_network
+      - back
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -32,8 +31,6 @@ services:
 
   postgres:
     image: postgres:alpine
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -41,7 +38,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - my_network
+      - back
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -55,7 +52,8 @@ services:
       - redis
       - postgres
     networks:
-      - my_network
+      - back
+      - worker
     healthcheck:
       test: ["CMD", "dotnet", "--version"]
       interval: 10s
@@ -71,14 +69,13 @@ services:
     image: voting_result:latest
     ports:
       - "8888:8888"
-    volumes:
-      - ./result:/app
-      - /app/node_modules
     depends_on:
       - worker
       - postgres
     networks:
-      - my_network
+      - front
+      - back
+      - worker
     deploy:
       replicas: 2
       restart_policy:
@@ -99,5 +96,9 @@ volumes:
       device: ":/export/postgres_data"
 
 networks:
-  my_network:
+  front:
+    driver: overlay
+  back:
+    driver: overlay
+  worker:
     driver: overlay
