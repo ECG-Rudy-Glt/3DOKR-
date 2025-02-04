@@ -26,6 +26,11 @@ Vagrant.configure("2") do |config|
       node.vm.provision "shell", inline: <<-SHELL
         echo '#{ip_address} #{node_name}' | sudo tee -a /etc/hosts
 
+        # Ajouter tous les nœuds dans /etc/hosts
+        echo "192.168.50.106 manager1" | sudo tee -a /etc/hosts
+        echo "192.168.50.107 worker1" | sudo tee -a /etc/hosts
+        echo "192.168.50.108 worker2" | sudo tee -a /etc/hosts
+
         # Configurer DNS pour éviter les problèmes de résolution
         # (Option rapide : désactiver systemd-resolved et gérer /etc/resolv.conf nous-mêmes)
         systemctl disable systemd-resolved
@@ -89,9 +94,12 @@ Vagrant.configure("2") do |config|
           # Quitter le swarm s'il existe déjà
           docker swarm leave -f || true
           
-          # Initialiser le swarm avec l'interface eth1
-          docker swarm init --advertise-addr eth1
+          # Initialiser le swarm avec l'IP privée
+          docker swarm init --advertise-addr #{ip_address}
 
+          # Configurer le routing mesh sur l'interface privée
+          docker network create --driver overlay --attachable --subnet=10.0.0.0/16 my_network
+          
           # Générer le token pour les workers
           SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
           echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
@@ -110,19 +118,14 @@ Vagrant.configure("2") do |config|
       # PROVISION SPÉCIFIQUE AUX WORKERS
       else
         node.vm.provision "shell", inline: <<-SHELL
-          # Attendre jusqu'à 120 secondes que le token soit généré par le manager
-          timeout=120
-          elapsed=0
-          until [ -f /vagrant/swarm_worker_token ] || [ $elapsed -ge $timeout ]; do
-            sleep 2
-            elapsed=$((elapsed+2))
-          done
-          if [ -f /vagrant/swarm_worker_token ]; then
-            SWARM_JOIN_TOKEN=$(cat /vagrant/swarm_worker_token)
-            docker swarm join --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
-          else
-            echo "Erreur: token du swarm non disponible après $timeout secondes."
-          fi
+          # Attendre que le manager soit prêt
+          sleep 30
+          
+          # Quitter le swarm s'il existe déjà
+          docker swarm leave -f || true
+          
+          # Rejoindre le swarm
+          docker swarm join --advertise-addr #{ip_address} --token $(cat /vagrant/swarm_worker_token) #{NODES["manager1"]}:2377
         SHELL
       end
     end

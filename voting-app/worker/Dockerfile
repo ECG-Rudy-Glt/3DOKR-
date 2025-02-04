@@ -4,6 +4,5 @@ COPY *.csproj ./
 RUN dotnet restore
 COPY . ./
 RUN dotnet publish -c Release -o out
-# Assurons-nous que le binaire est exécutable
 RUN chmod +x out/Worker.dll
 ENTRYPOINT ["dotnet", "out/Worker.dll"]
