@@ -12,7 +12,7 @@ services:
       - my_network
 
   redis:
-    image: "redis:alpine"
+    image: redis:alpine
     ports:
       - "6379:6379"
     volumes:
@@ -26,13 +26,14 @@ services:
       retries: 5
 
   postgres:
-    image: postgres:alpine
-    ports:
-      - "5432:5432"
+    image: postgres:11-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      # La variable POSTGRES_PASSWORD peut être définie dans un fichier .env (non versionné)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    secrets:
+      - db_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -53,7 +54,7 @@ services:
     networks:
       - my_network
     healthcheck:
-      test: ["CMD", "dotnet", "--version"]  
+      test: ["CMD", "dotnet", "--version"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -64,7 +65,7 @@ services:
       - "8888:8888"
     volumes:
       - ./result:/app
-      - /app/node_modules 
+      - /app/node_modules
     depends_on:
       worker:
         condition: service_healthy
@@ -80,3 +81,7 @@ volumes:
 networks:
   my_network:
     driver: bridge
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
