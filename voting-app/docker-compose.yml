@@ -13,9 +13,6 @@ services:
       - my_network
     deploy:
       replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
       restart_policy:
         condition: on-failure
 
@@ -65,10 +62,7 @@ services:
       timeout: 5s
       retries: 3
     deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 10s
+      replicas: 2
       restart_policy:
         condition: on-failure
 
@@ -87,9 +81,6 @@ services:
       - my_network
     deploy:
       replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
       restart_policy:
         condition: on-failure
 
