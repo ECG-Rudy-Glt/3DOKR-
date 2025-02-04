@@ -78,12 +78,8 @@ Vagrant.configure("2") do |config|
           exportfs -a
           systemctl restart nfs-kernel-server
 
-          # -------------------------------
-          # 1) CODE EXACT QUI FONCTIONNE POUR LE MANAGER
-          # -------------------------------
-          # Token a changer après les tests !!!
           if [ ! -d "/home/vagrant/3DOKR" ]; then
-           git clone https://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@github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
+           git clone https://ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
           fi
 
           cd /home/vagrant/3DOKR
@@ -107,9 +103,9 @@ Vagrant.configure("2") do |config|
           # Construire et taguer les images avec les bons noms
           docker compose build
           # Corriger les noms des images
-          docker tag voting-app-vote voting_web:latest
-          docker tag voting-app-worker voting_worker:latest
-          docker tag voting-app-result voting_result:latest
+          docker tag voting-app-vote voting_web:1.0
+          docker tag voting-app-worker voting_worker:1.0
+          docker tag voting-app-result voting_result:1.0
 
           # Déployer le stack
           docker stack deploy -c docker-compose.yml voting
