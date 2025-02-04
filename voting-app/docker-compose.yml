@@ -28,6 +28,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      replicas: 2
 
   postgres:
     image: postgres:17.2-alpine
@@ -44,6 +46,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      replicas: 2
 
   worker:
     build: ./worker/
