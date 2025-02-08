@@ -10,33 +10,28 @@ services:
       - redis
       - postgres
     networks:
-      - my_network
+      - front
     deploy:
       replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
       restart_policy:
         condition: on-failure
 
   redis:
-    image: "redis:alpine"
-    ports:
-      - "6379:6379"
+    image: redis:7.4.2-alpine
     volumes:
       - redis_data:/data
     networks:
-      - my_network
+      - back
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      replicas: 2
 
   postgres:
-    image: postgres:alpine
-    ports:
-      - "5432:5432"
+    image: postgres:17.2-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -44,12 +39,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - my_network
+      - back
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      replicas: 2
 
   worker:
     build: ./worker/
@@ -58,17 +55,16 @@ services:
       - redis
       - postgres
     networks:
-      - my_network
+      - worker
     healthcheck:
       test: ["CMD", "dotnet", "--version"]
       interval: 10s
       timeout: 5s
       retries: 3
     deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 10s
+      replicas: 2
+      placement:
+        constraints: ["node.labels.role == worker"]
       restart_policy:
         condition: on-failure
 
@@ -77,19 +73,13 @@ services:
     image: voting_result:latest
     ports:
       - "8888:8888"
-    volumes:
-      - ./result:/app
-      - /app/node_modules
     depends_on:
       - worker
       - postgres
     networks:
-      - my_network
+      - front
     deploy:
       replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
       restart_policy:
         condition: on-failure
 
@@ -108,5 +98,9 @@ volumes:
       device: ":/export/postgres_data"
 
 networks:
-  my_network:
+  front:
+    driver: overlay
+  back:
+    driver: overlay
+  worker:
     driver: overlay

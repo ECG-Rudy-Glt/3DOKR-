@@ -230,6 +230,8 @@ Afin de persister les données de Redis et PostgreSQL, nous allons utiliser le s
    docker network create --driver overlay --attachable --subnet=10.0.0.0/16 my_network # Le paramètre --subnet=10.0.0.0/16 définit la plage d’adresses IP disponibles pour les conteneurs reliés à ce réseau.
    ```
 
+   => repeter cett opération pour chaque réseaux du docker-compose.
+
 4. **Récupérer le token de jointure pour les workers** :
 
    ```bash
@@ -398,5 +400,3 @@ Pour chaque service, construisez manuellement l’image à partir du répertoire
   - Pour le service **result**, rendez-vous sur [http://192.168.50.106:8888](http://192.168.50.106:8888)
 
 Il se peut qu'il y ait des conflits au niveau des cartes reseau de la vm. Si eth1 ne fonctionne pas, utilisez l'adresse eth0.
-
-# forcer le reseau dans le vagrantfile
