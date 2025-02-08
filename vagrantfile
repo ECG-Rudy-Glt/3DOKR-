@@ -24,7 +24,6 @@ Vagrant.configure("2") do |config|
 
       # Provisionnement commun à tous les nœuds
       node.vm.provision "shell", inline: <<-SHELL
-        # Ajout d'entrées dans /etc/hosts si elles n'existent pas déjà
         grep -q "#{ip_address} #{node_name}" /etc/hosts || echo '#{ip_address} #{node_name}' >> /etc/hosts
         for host in "manager1:192.168.50.106" "worker1:192.168.50.107" "worker2:192.168.50.108"; do
           host_ip=$(echo $host | cut -d: -f2)
@@ -32,7 +31,6 @@ Vagrant.configure("2") do |config|
           grep -q "$host_ip $host_name" /etc/hosts || echo "$host_ip $host_name" >> /etc/hosts
         done
 
-        # Configuration DNS (désactivation de systemd-resolved pour simplifier la résolution)
         if systemctl is-active --quiet systemd-resolved; then
           systemctl disable systemd-resolved
           systemctl stop systemd-resolved
@@ -44,49 +42,40 @@ Vagrant.configure("2") do |config|
         apt-get update -y
         apt-get install -y curl git
 
-        # Installation de Docker (si non présent)
         if ! command -v docker >/dev/null 2>&1; then
           curl -fsSL https://get.docker.com -o get-docker.sh
           sh get-docker.sh
           rm get-docker.sh
         fi
 
-        # Installation de Docker Compose (si non présent)
         if ! command -v docker-compose >/dev/null 2>&1; then
           mkdir -p /usr/local/bin
           curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           chmod +x /usr/local/bin/docker-compose
         fi
 
-        # Ajouter l'utilisateur vagrant au groupe docker (si ce n'est pas déjà fait)
         usermod -aG docker vagrant || true
 
-        # Installation des paquets NFS (client)
         apt-get install -y nfs-common
       SHELL
 
       # Provisionnement spécifique au manager
       if node_name == "manager1"
         node.vm.provision "shell", inline: <<-SHELL
-          # Installer le serveur NFS si nécessaire
           if ! dpkg -l | grep -q nfs-kernel-server; then
             apt-get install -y nfs-kernel-server
           fi
 
-          # Création des répertoires d'export et configuration des permissions
           mkdir -p /export/redis_data /export/postgres_data
           chown -R nobody:nogroup /export
           chmod 777 /export/redis_data /export/postgres_data
 
-          # Ajout des exports dans /etc/exports (éviter les doublons)
           grep -q "^/export/redis_data" /etc/exports || echo "/export/redis_data *(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
           grep -q "^/export/postgres_data" /etc/exports || echo "/export/postgres_data *(rw,sync,no_subtree_check,no_root_squash)" >> /etc/exports
 
-          # Appliquer la configuration NFS
           exportfs -ra
           systemctl restart nfs-kernel-server
 
-          # Cloner le dépôt s'il n'existe pas encore
           if [ ! -d "/home/vagrant/3DOKR" ]; then
             git clone https://github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
           fi
@@ -96,34 +85,26 @@ Vagrant.configure("2") do |config|
 
           cd /home/vagrant/3DOKR/voting-app
 
-          # Réinitialiser le swarm s'il existe déjà
           docker swarm leave -f 2>/dev/null || true
-          # Initialiser le swarm en utilisant l'IP privée
           docker swarm init --advertise-addr #{ip_address}
 
-          # Créer le réseau overlay (si inexistant)
           if ! docker network ls | grep -q my_network; then
             docker network create --driver overlay --attachable --subnet=10.0.0.0/16 my_network
           fi
 
-          # Générer le token de jointure pour les workers et le stocker dans un fichier accessible
           SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
           echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
 
-          # Construction et tag des images
           docker compose build
           docker tag voting-app-vote voting_web:1.0
           docker tag voting-app-worker voting_worker:1.0
           docker tag voting-app-result voting_result:1.0
 
-          # Déploiement du stack
           docker stack deploy -c docker-compose.yml voting
         SHELL
 
       else
-        # Provisionnement spécifique aux workers
         node.vm.provision "shell", inline: <<-SHELL
-          # Boucle d'attente pour récupérer le token du manager (max 60s)
           TOKEN_FILE="/vagrant/swarm_worker_token"
           for i in {1..30}; do
             if [ -f "$TOKEN_FILE" ]; then
@@ -140,13 +121,10 @@ Vagrant.configure("2") do |config|
 
           SWARM_JOIN_TOKEN=$(cat $TOKEN_FILE)
 
-          # Quitter un éventuel swarm existant
           docker swarm leave -f 2>/dev/null || true
 
-          # Rejoindre le swarm
           docker swarm join --advertise-addr #{ip_address} --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
 
-          # Montage des répertoires NFS depuis le manager
           mkdir -p /mnt/redis_data /mnt/postgres_data
           sleep 5
           mount -t nfs #{NODES["manager1"]}:/export/redis_data /mnt/redis_data || echo "Échec du montage de /export/redis_data"
