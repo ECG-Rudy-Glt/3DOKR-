@@ -218,178 +218,6 @@ ENTRYPOINT ["dotnet", "out/Worker.dll"]
 - **Dépendances & Compilation :** Copie le fichier projet, restaure les dépendances, copie le code source, puis compile et publie en Release dans le dossier `out`.
 - **Permission & Lancement :** Modifie les permissions sur le fichier compilé et démarre l’application avec `dotnet out/Worker.dll`.
 
----
-
-## 5. Procédure Manuelle (Sans Vagrant ni Dockerfile)
-
-Il est possible de reproduire manuellement l’ensemble de la solution. Vous devrez réaliser les étapes suivantes :
-
-### A. Préparer les Machines (ou une machine) et Installer les Outils
-
-#### 1. Installer Docker et Docker Compose
-
-Sur chacune de vos machines (ou dans des environnements séparés pour simuler un cluster) :
-
-**Mettre à jour le système :**
-
-```bash
-sudo apt-get update && sudo apt-get upgrade -y
-```
-
-**Installer Docker :**
-
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-```
-
-**Installer Docker Compose** (exemple avec la version 1.29.2) :
-
-```bash
-sudo mkdir -p /usr/local/bin
-sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-**Ajouter l’utilisateur courant au groupe Docker :**
-
-```bash
-sudo usermod -aG docker $USER
-# Déconnectez-vous/reconnectez-vous pour prendre effet
-```
-
-#### 2. Installer et Configurer NFS (pour persister les données de Redis et Postgres)
-
-Si vous souhaitez mettre en place le stockage NFS :
-
-**Sur la machine qui jouera le rôle de serveur NFS (exemple : le manager) :**
-
-**Installer le serveur NFS :**
-
-```bash
-sudo apt-get install -y nfs-kernel-server
-```
-
-**Créer les répertoires d’export :**
-
-```bash
-sudo mkdir -p /export/redis_data /export/postgres_data
-sudo chown -R nobody:nogroup /export
-sudo chmod 777 /export/redis_data /export/postgres_data
-```
-
-**Configurer les exports :**
-
-```bash
-echo "/export/redis_data *(rw,sync,no_subtree_check,no_root_squash)" | sudo tee -a /etc/exports
-echo "/export/postgres_data *(rw,sync,no_subtree_check,no_root_squash)" | sudo tee -a /etc/exports
-sudo exportfs -a
-sudo systemctl restart nfs-kernel-server
-```
-
-**Sur les autres machines (clients NFS) :**
-
-**Installer les paquets NFS :**
-
-```bash
-sudo apt-get install -y nfs-common
-```
-
-**Monter manuellement un volume NFS** (exemple pour Redis) :
-
-```bash
-sudo mount -t nfs 192.168.50.106:/export/redis_data /chemin/local/redis_data
-```
-
-_Répétez pour PostgreSQL si nécessaire._
-
-### B. Configurer le Cluster Docker Swarm Manuellement
-
-#### 1. Sur le nœud Manager
-
-Si un swarm existe déjà, quittez-le (optionnel) :
-
-```bash
-docker swarm leave -f
-```
-
-**Initialiser le Swarm :**
-
-```bash
-docker swarm init --advertise-addr <IP_PRIVÉE_MANAGER>
-```
-
-_Remplacez `<IP_PRIVÉE_MANAGER>` par l’IP privée de votre manager (exemple : `192.168.50.106`)._
-
-**Créer le réseau overlay :**
-
-```bash
-docker network create --driver overlay --attachable --subnet=10.0.0.0/16 my_network
-```
-
-**Récupérer le token pour les workers :**
-
-```bash
-docker swarm join-token worker -q
-```
-
-_Notez ce token pour l’utiliser sur les nœuds workers._
-
-#### 2. Sur les nœuds Workers
-
-Quitter tout swarm existant (optionnel) :
-
-```bash
-docker swarm leave -f
-```
-
-**Rejoindre le Swarm :**
-
-```bash
-docker swarm join --advertise-addr <IP_PRIVÉE_WORKER> --token <TOKEN_WORKER> <IP_MANAGER>:2377
-```
-
-_Remplacez `<IP_PRIVÉE_WORKER>` par l’IP privée du worker, `<TOKEN_WORKER>` par le token obtenu, et `<IP_MANAGER>` par l’IP privée du manager._
-
-### C. Construire et Déployer les Images Manuellement
-
-#### 1. Pour chaque service, placez-vous dans le dossier correspondant :
-
-**Service Web (Python, dossier `vote/`)**
-
-```bash
-cd /chemin/vers/vote
-docker build -t voting_web:latest .
-```
-
-**Service Worker (.NET, dossier `worker/`)**
-
-```bash
-cd /chemin/vers/worker
-docker build -t voting_worker:latest .
-```
-
-**Service Result (Node.js, dossier `result/`)**
-
-```bash
-cd /chemin/vers/result
-docker build -t voting_result:latest .
-```
-
-#### 2. Créer le fichier `docker-compose.yml`
-
-Placez-le dans un dossier commun (exemple : `/chemin/vers/voting-app`) et copiez-y le contenu présenté dans la section 2.
-
-#### 3. Déployer la Stack Docker Swarm
-
-Depuis le manager, dans le dossier où se trouve votre fichier `docker-compose.yml` :
-
-```bash
-docker stack deploy -c docker-compose.yml voting
-```
-
-_Docker va déployer les services selon la configuration (nombre de répliques, stratégies d’update, etc.) sur le cluster Swarm._
-
 ### D. Accès et Vérifications
 
 **Vérifier l’état des services :**
@@ -422,3 +250,45 @@ docker service ps <NOM_DU_SERVICE>
 - Pour le service **result**, naviguez sur `http://<IP_MANAGER>:8888`.
 
 ---
+
+## 5. Lancement et vérification de l'installation
+
+1. **Démarrage des machines virtuelles**  
+   Depuis le répertoire du projet, lancez la commande suivante :
+
+   ```bash
+   vagrant up
+   ```
+
+2. **Connexion au nœud manager**  
+   Une fois l’installation terminée, connectez-vous au nœud manager :
+
+   ```bash
+   vagrant ssh manager1
+   ```
+
+3. **Vérification du cluster**  
+   Sur le nœud manager, exécutez les commandes suivantes pour vérifier l’état du cluster :
+
+   - Lister les nœuds du swarm :
+
+     ```bash
+     docker node ls
+     ```
+
+   - Vérifier la création du réseau overlay :
+
+     ```bash
+     docker network ls
+     ```
+
+   - Lister les services déployés dans la stack :
+
+     ```bash
+     docker stack services voting
+     ```
+
+   - Afficher le détail des tâches (conteneurs) pour un service :
+     ```bash
+     docker service ps <nom_du_service>
+     ```

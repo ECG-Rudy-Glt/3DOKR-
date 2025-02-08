@@ -148,14 +148,10 @@ Vagrant.configure("2") do |config|
 
           # Montage des répertoires NFS depuis le manager
           mkdir -p /mnt/redis_data /mnt/postgres_data
-          # Attente courte pour être sûr que le serveur NFS est opérationnel
           sleep 5
           mount -t nfs #{NODES["manager1"]}:/export/redis_data /mnt/redis_data || echo "Échec du montage de /export/redis_data"
           mount -t nfs #{NODES["manager1"]}:/export/postgres_data /mnt/postgres_data || echo "Échec du montage de /export/postgres_data"
 
-          # Ajouter le label "role=worker" sur ce nœud
-          NODE_ID=$(docker info -f '{{.Swarm.NodeID}}')
-          docker node update --label-add role=worker $NODE_ID
         SHELL
       end
     end
