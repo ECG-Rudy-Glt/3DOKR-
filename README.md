@@ -2,7 +2,7 @@
 
 Cette branche permet de **déployer l'application en local** à l'aide de **Docker Compose** sans nécessiter la mise en place d'un cluster Swarm. L'objectif est de faciliter le développement et les tests sur une machine locale.
 
----
+
 
 ## 📌 Contenu de la Stack Docker Compose
 
@@ -43,7 +43,7 @@ web:
     - my_network
 ```
 
-````
+
 
 ---
 
@@ -186,9 +186,9 @@ cd docker_dev
 Ajoutez les variables d'environnement PostgreSQL dans un fichier `.env` à la racine du projet :
 
 ```ini
-POSTGRES_DB=mydatabase
-POSTGRES_USER=myuser
-POSTGRES_PASSWORD=mypassword
+POSTGRES_DB=Postgres
+POSTGRES_USER=Postgres
+POSTGRES_PASSWORD=Postgres
 ```
 
 ### 🔹 **3. Démarrer les Conteneurs**
