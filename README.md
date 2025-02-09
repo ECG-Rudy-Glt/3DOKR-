@@ -293,7 +293,7 @@ docker service ps <NOM_DU_SERVICE>
      docker service ps <nom_du_service>
      ```
 
-si tous les services sont sur manager1:
+  - si tous les services sont sur manager1:
     ```bash
     docker container ls
     docker container kill <ID_du_conteneur>
