@@ -1,11 +1,9 @@
 services:
   web:
     build: ./vote/
-    image: voting_web:latest
+    image: voting_web:1.0
     ports:
       - "8080:8080"
-    volumes:
-      - .:/code
     depends_on:
       - redis
       - postgres
@@ -50,7 +48,7 @@ services:
 
   worker:
     build: ./worker/
-    image: voting_worker:latest
+    image: voting_worker:1.0
     depends_on:
       - redis
       - postgres
@@ -68,7 +66,7 @@ services:
 
   result:
     build: ./result/
-    image: voting_result:latest
+    image: voting_result:1.0
     ports:
       - "8888:8888"
     depends_on:

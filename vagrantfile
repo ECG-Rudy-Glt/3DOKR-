@@ -2,9 +2,9 @@
 # vi: set ft=ruby :
 
 NODES = {
-  "manager1" => "192.168.50.106",
   "worker1"  => "192.168.50.107",
   "worker2"  => "192.168.50.108",
+  "manager1" => "192.168.50.106",
 }
 
 Vagrant.configure("2") do |config|
@@ -100,10 +100,10 @@ Vagrant.configure("2") do |config|
           docker tag voting-app-worker voting_worker:1.0
           docker tag voting-app-result voting_result:1.0
 
-          # Attendre que le nombre de nœuds du swarm atteigne 2 (manager + 1 worker)
+          # Attendre que le nombre de nœuds du swarm atteigne 3 (manager + 2 workers)
           for i in {1..30}; do
             NODE_COUNT=$(docker node ls --format '{{.ID}}' | wc -l)
-            if [ "$NODE_COUNT" -ge 2 ]; then
+            if [ "$NODE_COUNT" -ge 3 ]; then
               echo "Tous les nœuds sont présents ($NODE_COUNT)"
               break
             fi
@@ -111,8 +111,7 @@ Vagrant.configure("2") do |config|
             sleep 5
           done
 
-          # Déployer la stack une fois l'attente terminée
-          docker stack deploy -c docker-compose.yml voting
+          # (Supprimez ici le déploiement de la stack)
         SHELL
 
       else
@@ -145,5 +144,12 @@ Vagrant.configure("2") do |config|
         SHELL
       end
     end
+  end
+
+  # Ajout d'un trigger global pour lancer le déploiement une fois toutes les machines créées
+  config.trigger.after :up do |trigger|
+    trigger.name = "Deploy Docker stack from manager1"
+    # Attendez quelques secondes pour être sûr que tous les nœuds ont terminé leur provisionnement
+    trigger.run = { inline: "sleep 10 && vagrant ssh manager1 -c 'docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting'" }
   end
 end
