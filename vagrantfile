@@ -2,7 +2,7 @@
 # vi: set ft=ruby :
 
 NODES = {
-  "manager1" => "192.168.50.106",  # Remettez manager1 en premier
+  "manager1" => "192.168.50.106",  # Manager (doit être défini en premier)
   "worker1"  => "192.168.50.107",
   "worker2"  => "192.168.50.108",
 }
@@ -10,9 +10,9 @@ NODES = {
 Vagrant.configure("2") do |config|
   config.vm.boot_timeout = 600
 
-  NODES.each do |node_name, ip_address| 
+  NODES.each do |node_name, ip_address|
     config.vm.define node_name do |node|
-      node.vm.box = "bento/ubuntu-20.04"
+      node.vm.box     = "bento/ubuntu-20.04"
       node.vm.hostname = node_name
       node.vm.network "private_network", ip: ip_address
 
@@ -24,6 +24,7 @@ Vagrant.configure("2") do |config|
 
       # Provisionnement commun à tous les nœuds
       node.vm.provision "shell", inline: <<-SHELL
+        # Mettre à jour le fichier /etc/hosts pour permettre la résolution entre nœuds
         grep -q "#{ip_address} #{node_name}" /etc/hosts || echo '#{ip_address} #{node_name}' >> /etc/hosts
         for host in "manager1:192.168.50.106" "worker1:192.168.50.107" "worker2:192.168.50.108"; do
           host_ip=$(echo $host | cut -d: -f2)
@@ -31,6 +32,7 @@ Vagrant.configure("2") do |config|
           grep -q "$host_ip $host_name" /etc/hosts || echo "$host_ip $host_name" >> /etc/hosts
         done
 
+        # Désactiver systemd-resolved s'il est actif
         if systemctl is-active --quiet systemd-resolved; then
           systemctl disable systemd-resolved
           systemctl stop systemd-resolved
@@ -42,12 +44,14 @@ Vagrant.configure("2") do |config|
         apt-get update -y
         apt-get install -y curl git
 
+        # Installer Docker s'il n'est pas présent
         if ! command -v docker >/dev/null 2>&1; then
           curl -fsSL https://get.docker.com -o get-docker.sh
           sh get-docker.sh
           rm get-docker.sh
         fi
 
+        # Installer Docker Compose s'il n'est pas présent
         if ! command -v docker-compose >/dev/null 2>&1; then
           mkdir -p /usr/local/bin
           curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -56,16 +60,19 @@ Vagrant.configure("2") do |config|
 
         usermod -aG docker vagrant || true
 
+        # Installer le client NFS (pour les workers qui monteront les volumes)
         apt-get install -y nfs-common
       SHELL
 
       # Provisionnement spécifique au manager
       if node_name == "manager1"
         node.vm.provision "shell", inline: <<-SHELL
+          # Installer le serveur NFS si nécessaire
           if ! dpkg -l | grep -q nfs-kernel-server; then
             apt-get install -y nfs-kernel-server
           fi
 
+          # Créer et configurer les répertoires exportés pour NFS
           mkdir -p /export/redis_data /export/postgres_data
           chown -R nobody:nogroup /export
           chmod 777 /export/redis_data /export/postgres_data
@@ -76,44 +83,54 @@ Vagrant.configure("2") do |config|
           exportfs -ra
           systemctl restart nfs-kernel-server
 
+          # Cloner le dépôt si nécessaire et se placer sur la branche de configuration swarm
           if [ ! -d "/home/vagrant/3DOKR" ]; then
             git clone https://github.com/ECG-Rudy-Glt/3DOKR-.git /home/vagrant/3DOKR
           fi
-
           cd /home/vagrant/3DOKR
           git checkout swarm_config
 
           cd /home/vagrant/3DOKR/voting-app
 
+          # S'assurer de ne pas être déjà dans un swarm
           docker swarm leave -f 2>/dev/null || true
+          # Initialiser le swarm en utilisant l'IP du manager
           docker swarm init --advertise-addr #{ip_address}
 
+          # Créer le réseau overlay s'il n'existe pas déjà
           if ! docker network ls | grep -q my_network; then
             docker network create --driver overlay --attachable --subnet=10.0.0.0/16 my_network
           fi
 
+          # Récupérer le token d'adhésion pour les workers et le rendre accessible aux autres nœuds
           SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
           echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
 
-          docker compose build
+          # Construire les images et appliquer les tags locaux
+          docker-compose build
           docker tag voting-app-vote voting_web:1.0
           docker tag voting-app-worker voting_worker:1.0
           docker tag voting-app-result voting_result:1.0
 
-          # Attendre que le nombre de nœuds du swarm atteigne 3 (manager + 2 workers)
+          # Attendre que les workers rejoignent le swarm (manager + 2 workers = 3 nœuds)
           for i in {1..30}; do
             NODE_COUNT=$(docker node ls --format '{{.ID}}' | wc -l)
-            if [ "$NODE_COUNT" -ge 3]; then
+            if [ "$NODE_COUNT" -ge 3 ]; then
               echo "Tous les nœuds sont présents ($NODE_COUNT)"
               break
             fi
             echo "Attente de l'intégration des workers... Tentative $i"
             sleep 5
           done
+
+          # Déployer la stack Docker (le fichier docker-compose utilise les réseaux overlay)
+          docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting
         SHELL
 
+      # Provisionnement spécifique aux workers
       else
         node.vm.provision "shell", inline: <<-SHELL
+          # Attendre que le token du manager soit disponible
           TOKEN_FILE="/vagrant/swarm_worker_token"
           for i in {1..30}; do
             if [ -f "$TOKEN_FILE" ]; then
@@ -130,28 +147,28 @@ Vagrant.configure("2") do |config|
 
           SWARM_JOIN_TOKEN=$(cat $TOKEN_FILE)
 
+          # Quitter un éventuel swarm précédent et rejoindre le swarm
           docker swarm leave -f 2>/dev/null || true
-
           docker swarm join --advertise-addr #{ip_address} --token $SWARM_JOIN_TOKEN #{NODES["manager1"]}:2377
 
+          # Monter les partages NFS depuis le manager pour redis et postgres
           mkdir -p /mnt/redis_data /mnt/postgres_data
           sleep 5
           mount -t nfs #{NODES["manager1"]}:/export/redis_data /mnt/redis_data || echo "Échec du montage de /export/redis_data"
           mount -t nfs #{NODES["manager1"]}:/export/postgres_data /mnt/postgres_data || echo "Échec du montage de /export/postgres_data"
-
         SHELL
       end
     end
-  end  # End of NODES.each
+  end
 
-  # Single trigger block at the end
+  # (Optionnel) Trigger pour redéployer la stack après le démarrage
   config.trigger.after :up do |trigger|
     trigger.name = "Deploy Docker stack from manager1"
     trigger.run = {
       inline: <<-SCRIPT
-        Start-Sleep -Seconds 10
+        sleep 10
         vagrant ssh manager1 -c "docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting"
       SCRIPT
     }
   end
-end 
+end
