@@ -12,7 +12,7 @@ Vagrant.configure("2") do |config|
 
   NODES.each do |node_name, ip_address|
     config.vm.define node_name do |node|
-      node.vm.box     = "bento/ubuntu-20.04"
+      node.vm.box = "bento/ubuntu-20.04"
       node.vm.hostname = node_name
       node.vm.network "private_network", ip: ip_address
 
@@ -24,7 +24,7 @@ Vagrant.configure("2") do |config|
 
       # Provisionnement commun à tous les nœuds
       node.vm.provision "shell", inline: <<-SHELL
-        # Mettre à jour le fichier /etc/hosts pour permettre la résolution entre nœuds
+        # Mise à jour du fichier /etc/hosts pour permettre la résolution entre nœuds
         grep -q "#{ip_address} #{node_name}" /etc/hosts || echo '#{ip_address} #{node_name}' >> /etc/hosts
         for host in "manager1:192.168.50.106" "worker1:192.168.50.107" "worker2:192.168.50.108"; do
           host_ip=$(echo $host | cut -d: -f2)
@@ -106,11 +106,17 @@ Vagrant.configure("2") do |config|
           SWARM_JOIN_TOKEN=$(docker swarm join-token -q worker)
           echo $SWARM_JOIN_TOKEN > /vagrant/swarm_worker_token
 
-          # Construire les images et appliquer les tags locaux
-          docker-compose build
-          docker tag voting-app-vote voting_web:1.0
-          docker tag voting-app-worker voting_worker:1.0
-          docker tag voting-app-result voting_result:1.0
+          # Construire les images et les taguer de manière cohérente
+          # Ici, nous construisons directement avec le nom final souhaité
+          docker build -t voting_web:1.0 ./vote
+          docker build -t voting_worker:1.0 ./worker
+          docker build -t voting_result:1.0 ./result
+
+          # Sauvegarder les images dans un répertoire partagé pour les charger sur les workers
+          mkdir -p /vagrant/images
+          docker save voting_web:1.0 -o /vagrant/images/voting_web_1.0.tar
+          docker save voting_worker:1.0 -o /vagrant/images/voting_worker_1.0.tar
+          docker save voting_result:1.0 -o /vagrant/images/voting_result_1.0.tar
 
           # Attendre que les workers rejoignent le swarm (manager + 2 workers = 3 nœuds)
           for i in {1..30}; do
@@ -123,13 +129,21 @@ Vagrant.configure("2") do |config|
             sleep 5
           done
 
-          # Déployer la stack Docker (le fichier docker-compose utilise les réseaux overlay)
+          # Déployer la stack Docker (en utilisant le chemin correct vers le fichier docker-compose.yml)
           docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting
         SHELL
 
       # Provisionnement spécifique aux workers
       else
         node.vm.provision "shell", inline: <<-SHELL
+          # Charger les images pré-construites depuis le dossier partagé /vagrant/images
+          if [ -d /vagrant/images ]; then
+            for image in /vagrant/images/*.tar; do
+              echo "Chargement de l'image $image"
+              docker load -i "$image"
+            done
+          fi
+
           # Attendre que le token du manager soit disponible
           TOKEN_FILE="/vagrant/swarm_worker_token"
           for i in {1..30}; do
@@ -159,16 +173,5 @@ Vagrant.configure("2") do |config|
         SHELL
       end
     end
-  end
-
-  # (Optionnel) Trigger pour redéployer la stack après le démarrage
-  config.trigger.after :up do |trigger|
-    trigger.name = "Deploy Docker stack from manager1"
-    trigger.run = {
-      inline: <<-SCRIPT
-        sleep 10
-        vagrant ssh manager1 -c "docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting"
-      SCRIPT
-    }
   end
 end
