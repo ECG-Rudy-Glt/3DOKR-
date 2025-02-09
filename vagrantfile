@@ -100,6 +100,18 @@ Vagrant.configure("2") do |config|
           docker tag voting-app-worker voting_worker:1.0
           docker tag voting-app-result voting_result:1.0
 
+          # Attendre que le nombre de nœuds du swarm atteigne 2 (manager + 1 worker)
+          for i in {1..30}; do
+            NODE_COUNT=$(docker node ls --format '{{.ID}}' | wc -l)
+            if [ "$NODE_COUNT" -ge 2 ]; then
+              echo "Tous les nœuds sont présents ($NODE_COUNT)"
+              break
+            fi
+            echo "Attente de l'intégration des workers... Tentative $i"
+            sleep 5
+          done
+
+          # Déployer la stack une fois l'attente terminée
           docker stack deploy -c docker-compose.yml voting
         SHELL
 

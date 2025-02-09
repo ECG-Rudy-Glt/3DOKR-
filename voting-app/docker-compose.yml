@@ -63,8 +63,6 @@ services:
       retries: 3
     deploy:
       replicas: 2
-      placement:
-        constraints: ["node.labels.role == worker"]
       restart_policy:
         condition: on-failure
 
