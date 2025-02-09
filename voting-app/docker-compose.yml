@@ -3,8 +3,6 @@ services:
     build: ./vote/
     ports:
       - "8080:8080"
-    volumes:
-      - .:/code
     depends_on:
       - redis
       - postgres
@@ -66,9 +64,6 @@ services:
     build: ./result/
     ports:
       - "8888:8888"
-    volumes:
-      - ./result:/app
-      - /app/node_modules
     depends_on:
       worker:
         condition: service_healthy
