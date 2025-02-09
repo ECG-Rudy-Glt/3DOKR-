@@ -292,3 +292,11 @@ docker service ps <NOM_DU_SERVICE>
      ```bash
      docker service ps <nom_du_service>
      ```
+
+si tous les services sont sur manager1:
+`bash
+     docker container ls
+      docker container kill <ID_du_conteneur>
+     `
+
+refaite un docker ps <NOM_DU_SERVICE> et vous verrais qu'il se créera sur un autre noeud.
