@@ -103,15 +103,13 @@ Vagrant.configure("2") do |config|
           # Attendre que le nombre de nœuds du swarm atteigne 3 (manager + 2 workers)
           for i in {1..30}; do
             NODE_COUNT=$(docker node ls --format '{{.ID}}' | wc -l)
-            if [ "$NODE_COUNT" -ge 3 ]; then
+            if [ "$NODE_COUNT" -ge 3]; then
               echo "Tous les nœuds sont présents ($NODE_COUNT)"
               break
             fi
             echo "Attente de l'intégration des workers... Tentative $i"
             sleep 5
           done
-
-          # (Supprimez ici le déploiement de la stack)
         SHELL
 
       else
@@ -144,12 +142,16 @@ Vagrant.configure("2") do |config|
         SHELL
       end
     end
-  end
+  end  # End of NODES.each
 
-  # Ajout d'un trigger global pour lancer le déploiement une fois toutes les machines créées
+  # Single trigger block at the end
   config.trigger.after :up do |trigger|
     trigger.name = "Deploy Docker stack from manager1"
-    # Attendez quelques secondes pour être sûr que tous les nœuds ont terminé leur provisionnement
-    trigger.run = { inline: "sleep 10 && vagrant ssh manager1 -c 'docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting'" }
+    trigger.run = {
+      inline: <<-SCRIPT
+        Start-Sleep -Seconds 10
+        vagrant ssh manager1 -c "docker stack deploy -c /home/vagrant/3DOKR/voting-app/docker-compose.yml voting"
+      SCRIPT
+    }
   end
-end
+end 
