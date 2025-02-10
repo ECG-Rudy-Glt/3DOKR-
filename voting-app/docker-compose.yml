@@ -76,6 +76,7 @@ services:
       - postgres
     networks:
       - front
+      - back
     deploy:
       replicas: 2
       restart_policy:
