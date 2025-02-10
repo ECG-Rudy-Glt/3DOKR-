@@ -55,6 +55,7 @@ services:
       - postgres
     networks:
       - worker
+      - backS
     healthcheck:
       test: ["CMD", "dotnet", "--version"]
       interval: 10s
